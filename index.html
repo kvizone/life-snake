@@ -591,21 +591,6 @@
             osc.stop(audioCtx.currentTime + 0.05);
         }
 
-        function soundNormalEat() {
-            if (!audioCtx || audioCtx.state !== 'running') return;
-            const osc  = audioCtx.createOscillator();
-            const gain = audioCtx.createGain();
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
-            osc.connect(gain);
-            gain.connect(audioCtx.destination);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
-        }
-
         function soundEat() {
             if (!audioCtx || audioCtx.state !== 'running') return;
             const osc  = audioCtx.createOscillator();
@@ -628,30 +613,156 @@
             setTimeout(() => playTone(100, 'square', 0.30, 0.15), 300);
         }
 
-        // --- BGM ---
-        // Progressão viciante em 8-bit (Am, G, F, E)
-        const bgmNotes = [
-            220.0, 261.6, 329.6, 261.6, 440.0, 329.6, 261.6, 329.6,
-            196.0, 246.9, 293.7, 246.9, 392.0, 293.7, 246.9, 293.7,
-            174.6, 220.0, 261.6, 220.0, 349.2, 261.6, 220.0, 261.6,
-            164.8, 207.7, 246.9, 207.7, 329.6, 246.9, 207.7, 246.9
+        // --- BGM Selva / Cobra ---
+        // E menor pentatônico + percussão tribal (Web Audio API)
+        const JUNGLE_MELODY = [
+            { f: 329.63, d: 0.24, w: 'triangle', v: 0.034 }, // E4
+            { f: 392.00, d: 0.18, w: 'triangle', v: 0.028 }, // G4
+            { f: 440.00, d: 0.22, w: 'triangle', v: 0.032 }, // A4
+            { f: 392.00, d: 0.16, w: 'triangle', v: 0.026 }, // G4
+            { f: 329.63, d: 0.26, w: 'triangle', v: 0.034 }, // E4
+            { f: 293.66, d: 0.18, w: 'triangle', v: 0.028 }, // D4
+            { f: 329.63, d: 0.20, w: 'triangle', v: 0.030 }, // E4
+            { f: 0,      d: 0.12, w: 'triangle', v: 0     },
+            { f: 440.00, d: 0.20, w: 'triangle', v: 0.032 }, // A4
+            { f: 493.88, d: 0.18, w: 'triangle', v: 0.028 }, // B4
+            { f: 440.00, d: 0.20, w: 'triangle', v: 0.030 }, // A4
+            { f: 392.00, d: 0.22, w: 'triangle', v: 0.032 }, // G4
+            { f: 329.63, d: 0.24, w: 'triangle', v: 0.034 }, // E4
+            { f: 246.94, d: 0.20, w: 'triangle', v: 0.026 }, // B3
+            { f: 293.66, d: 0.22, w: 'triangle', v: 0.028 }, // D4
+            { f: 0,      d: 0.14, w: 'triangle', v: 0     }
         ];
+
+        const JUNGLE_RHYTHM = [
+            'kick', 'shaker', 'shaker', 'shaker',
+            'kick', 'tom',    'shaker', 'shaker',
+            'kick', 'shaker', 'shaker', 'tom',
+            'kick', 'shaker', 'kick',   'shaker'
+        ];
+
         let bgmInterval = null;
-        let bgmIndex    = 0;
+        let bgmStep = 0;
+        let bgmMelodyIndex = 0;
+
+        function playJungleKick() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(88, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(42, audioCtx.currentTime + 0.14);
+            gain.gain.setValueAtTime(0.11, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.16);
+        }
+
+        function playJungleTom() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(148, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(72, audioCtx.currentTime + 0.10);
+            gain.gain.setValueAtTime(0.07, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.12);
+        }
+
+        function playJungleShaker() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const duration = 0.05;
+            const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+            }
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.value = 6200;
+            filter.Q.value = 0.8;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.045, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start();
+            source.stop(audioCtx.currentTime + duration);
+        }
+
+        function playJungleBass() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            playTone(82.41, 'sine', 0.35, 0.025); // E2 — pulso grave da selva
+        }
+
+        function playSnakeHiss() {
+            if (!audioCtx || audioCtx.state !== 'running') return;
+            const duration = 0.28;
+            const bufferSize = Math.floor(audioCtx.sampleRate * duration);
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1;
+            }
+            const source = audioCtx.createBufferSource();
+            source.buffer = buffer;
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'bandpass';
+            filter.frequency.setValueAtTime(1800, audioCtx.currentTime);
+            filter.frequency.exponentialRampToValueAtTime(5200, audioCtx.currentTime + duration * 0.55);
+            filter.frequency.exponentialRampToValueAtTime(900, audioCtx.currentTime + duration);
+            filter.Q.value = 2.5;
+            const gain = audioCtx.createGain();
+            gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
+            gain.gain.linearRampToValueAtTime(0.022, audioCtx.currentTime + 0.04);
+            gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            source.connect(filter);
+            filter.connect(gain);
+            gain.connect(audioCtx.destination);
+            source.start();
+            source.stop(audioCtx.currentTime + duration);
+        }
 
         function startBGM() {
             if (bgmInterval) return;
+            bgmStep = 0;
+            bgmMelodyIndex = 0;
             bgmInterval = setInterval(() => {
-                if (audioCtx && audioCtx.state === 'running' && bgmNotes[bgmIndex] > 0) {
-                    playTone(bgmNotes[bgmIndex], 'square', 0.10, 0.03);
+                if (!audioCtx || audioCtx.state !== 'running') return;
+
+                const rhythm = JUNGLE_RHYTHM[bgmStep % JUNGLE_RHYTHM.length];
+                if (rhythm === 'kick') playJungleKick();
+                else if (rhythm === 'tom') playJungleTom();
+                else if (rhythm === 'shaker') playJungleShaker();
+
+                if (bgmStep % 2 === 0) {
+                    const note = JUNGLE_MELODY[bgmMelodyIndex % JUNGLE_MELODY.length];
+                    if (note.f > 0) playTone(note.f, note.w, note.d, note.v);
+                    bgmMelodyIndex++;
                 }
-                bgmIndex = (bgmIndex + 1) % bgmNotes.length;
-            }, 120);
+
+                if (bgmStep % 8 === 0) playJungleBass();
+                if (bgmStep % 32 === 20) playSnakeHiss();
+
+                bgmStep++;
+            }, 170);
         }
 
         function stopBGM() {
             clearInterval(bgmInterval);
             bgmInterval = null;
+            bgmStep = 0;
+            bgmMelodyIndex = 0;
         }
 
         // =====================================================================
@@ -1034,7 +1145,6 @@
             snake.unshift(head);
 
             if (head.x === food.x && head.y === food.y) {
-                soundNormalEat();
                 score += 100;
                 foodsEaten++;
                 updateScoreUI();
