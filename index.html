@@ -319,6 +319,67 @@
         ::-webkit-scrollbar { width: 10px; }
         ::-webkit-scrollbar-track { background: var(--bg-color); border-left: 2px solid var(--fg-color); }
         ::-webkit-scrollbar-thumb { background: var(--fg-color); }
+
+        /* Mobile Controls (D-pad) */
+        #mobileControls {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 16px;
+            margin-bottom: 10px;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .dpad-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 8px;
+        }
+
+        .dpad-btn {
+            width: 72px;
+            height: 72px;
+            font-size: 1.6rem;
+            line-height: 1;
+            background-color: var(--fg-color);
+            color: var(--bg-color);
+            border: 4px solid var(--fg-color);
+            border-radius: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            margin: 0;
+            padding: 0;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+            box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .dpad-btn:active,
+        .dpad-btn.pressed {
+            background-color: var(--bg-color);
+            color: var(--fg-color);
+            transform: scale(0.92);
+            box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .dpad-center {
+            width: 72px;
+            height: 72px;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @media (max-width: 768px), (hover: none) and (pointer: coarse) {
+            #mobileControls { display: flex; }
+        }
     </style>
 </head>
 <body>
@@ -375,6 +436,18 @@
                 <canvas id="gameCanvas" width="400" height="400"></canvas>
                 <button id="btnPlayAgain">JOGAR DE NOVO</button>
             </div>
+
+            <!-- CONTROLES MOBILE -->
+            <div id="mobileControls" aria-label="Controles direcionais">
+                <button type="button" class="dpad-btn" id="dpadUp" aria-label="Mover para cima">▲</button>
+                <div class="dpad-row">
+                    <button type="button" class="dpad-btn" id="dpadLeft" aria-label="Mover para esquerda">◄</button>
+                    <div class="dpad-center" aria-hidden="true"></div>
+                    <button type="button" class="dpad-btn" id="dpadRight" aria-label="Mover para direita">►</button>
+                </div>
+                <button type="button" class="dpad-btn" id="dpadDown" aria-label="Mover para baixo">▼</button>
+            </div>
+
         </div>
 
     </div>
@@ -774,6 +847,8 @@
         let spiderRemoveTimerId = null;
         let spiderMoveIntervalId = null;
         let floatingTexts = [];
+        let foodsEaten = 0;
+        const SPIDER_MIN_FOODS = 5;
 
         function startGame() {
             // Limpa qualquer loop anterior
@@ -797,6 +872,7 @@
             specialFood = null;
             spider = null;
             floatingTexts = [];
+            foodsEaten = 0;
             const cfg = SPEED_MAP[selectedSpeed] || SPEED_MAP.medium;
             gameSpeed    = cfg.initial;
             gameSpeedMin = cfg.min;
@@ -847,6 +923,10 @@
             const delay = 5000 + Math.random() * 5000;
             spiderSpawnTimerId = setTimeout(() => {
                 if (!isGameRunning) return;
+                if (foodsEaten < SPIDER_MIN_FOODS) {
+                    scheduleSpider();
+                    return;
+                }
                 spawnSpider();
                 spiderRemoveTimerId = setTimeout(() => {
                     removeSpider();
@@ -956,6 +1036,7 @@
             if (head.x === food.x && head.y === food.y) {
                 soundNormalEat();
                 score += 100;
+                foodsEaten++;
                 updateScoreUI();
                 placeFood();
                 if (gameSpeed > gameSpeedMin) gameSpeed -= gameSpeedStep;
@@ -1101,12 +1182,25 @@
         }
 
         // =====================================================================
+        //  CONTROLES DE DIREÇÃO
+        // =====================================================================
+        function setDirection(nx, ny) {
+            if (!isGameRunning) return;
+            if (nx !== 0 && dx === 0) {
+                nextDx = nx;
+                nextDy = 0;
+            } else if (ny !== 0 && dy === 0) {
+                nextDx = 0;
+                nextDy = ny;
+            }
+        }
+
+        // =====================================================================
         //  CONTROLES DE TECLADO
         // =====================================================================
         window.addEventListener('keydown', e => {
             if (!audioCtx) initAudio();
 
-            // Evita scroll com setas APENAS fora de inputs
             const tag = document.activeElement.tagName;
             if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
                 if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) {
@@ -1114,45 +1208,43 @@
                 }
             }
 
-            // Controles do jogo só durante gameplay ativa
             if (!isGameRunning) return;
 
             switch (e.key) {
-                case 'ArrowUp':    case 'w': case 'W': if (dy ===  0) { nextDx = 0;  nextDy = -1; } break;
-                case 'ArrowDown':  case 's': case 'S': if (dy ===  0) { nextDx = 0;  nextDy =  1; } break;
-                case 'ArrowLeft':  case 'a': case 'A': if (dx ===  0) { nextDx = -1; nextDy =  0; } break;
-                case 'ArrowRight': case 'd': case 'D': if (dx ===  0) { nextDx =  1; nextDy =  0; } break;
+                case 'ArrowUp':    case 'w': case 'W': setDirection(0, -1); break;
+                case 'ArrowDown':  case 's': case 'S': setDirection(0,  1); break;
+                case 'ArrowLeft':  case 'a': case 'A': setDirection(-1, 0); break;
+                case 'ArrowRight': case 'd': case 'D': setDirection(1,  0); break;
             }
         });
 
         // =====================================================================
-        //  CONTROLES MOBILE (Swipe)
+        //  CONTROLES MOBILE (D-Pad)
         // =====================================================================
-        let touchStartX = 0;
-        let touchStartY = 0;
+        function bindDpadButton(id, nx, ny) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
 
-        canvas.addEventListener('touchstart', e => {
-            if (!audioCtx) initAudio();
-            touchStartX = e.changedTouches[0].screenX;
-            touchStartY = e.changedTouches[0].screenY;
-        }, { passive: false });
+            const handlePress = (e) => {
+                e.preventDefault();
+                if (!audioCtx) initAudio();
+                setDirection(nx, ny);
+            };
 
-        canvas.addEventListener('touchmove', e => { e.preventDefault(); }, { passive: false });
+            btn.addEventListener('pointerdown', (e) => {
+                handlePress(e);
+                btn.classList.add('pressed');
+            });
 
-        canvas.addEventListener('touchend', e => {
-            if (!isGameRunning) return;
+            btn.addEventListener('pointerup', () => btn.classList.remove('pressed'));
+            btn.addEventListener('pointerleave', () => btn.classList.remove('pressed'));
+            btn.addEventListener('pointercancel', () => btn.classList.remove('pressed'));
+        }
 
-            const diffX = e.changedTouches[0].screenX - touchStartX;
-            const diffY = e.changedTouches[0].screenY - touchStartY;
-
-            if (Math.abs(diffX) > Math.abs(diffY)) {
-                if (diffX >  30 && dx === 0) { nextDx =  1; nextDy = 0; }
-                if (diffX < -30 && dx === 0) { nextDx = -1; nextDy = 0; }
-            } else {
-                if (diffY >  30 && dy === 0) { nextDx = 0; nextDy =  1; }
-                if (diffY < -30 && dy === 0) { nextDx = 0; nextDy = -1; }
-            }
-        });
+        bindDpadButton('dpadUp', 0, -1);
+        bindDpadButton('dpadDown', 0, 1);
+        bindDpadButton('dpadLeft', -1, 0);
+        bindDpadButton('dpadRight', 1, 0);
 
         // =====================================================================
         //  INIT E FIREBASE LISTENERS
