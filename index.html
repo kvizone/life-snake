@@ -615,6 +615,7 @@
 
         // --- BGM Selva / Cobra ---
         // E menor pentatônico + percussão tribal (Web Audio API)
+        const BGM_VOLUME = 2.25;
         const JUNGLE_MELODY = [
             { f: 329.63, d: 0.24, w: 'triangle', v: 0.034 }, // E4
             { f: 392.00, d: 0.18, w: 'triangle', v: 0.028 }, // G4
@@ -652,7 +653,7 @@
             osc.type = 'sine';
             osc.frequency.setValueAtTime(88, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(42, audioCtx.currentTime + 0.14);
-            gain.gain.setValueAtTime(0.11, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.11 * BGM_VOLUME, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -667,7 +668,7 @@
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(148, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(72, audioCtx.currentTime + 0.10);
-            gain.gain.setValueAtTime(0.07, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.07 * BGM_VOLUME, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.12);
             osc.connect(gain);
             gain.connect(audioCtx.destination);
@@ -691,7 +692,7 @@
             filter.frequency.value = 6200;
             filter.Q.value = 0.8;
             const gain = audioCtx.createGain();
-            gain.gain.setValueAtTime(0.045, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.045 * BGM_VOLUME, audioCtx.currentTime);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
             source.connect(filter);
             filter.connect(gain);
@@ -702,7 +703,7 @@
 
         function playJungleBass() {
             if (!audioCtx || audioCtx.state !== 'running') return;
-            playTone(82.41, 'sine', 0.35, 0.025); // E2 — pulso grave da selva
+            playTone(82.41, 'sine', 0.35, 0.025 * BGM_VOLUME); // E2 — pulso grave da selva
         }
 
         function playSnakeHiss() {
@@ -724,7 +725,7 @@
             filter.Q.value = 2.5;
             const gain = audioCtx.createGain();
             gain.gain.setValueAtTime(0.001, audioCtx.currentTime);
-            gain.gain.linearRampToValueAtTime(0.022, audioCtx.currentTime + 0.04);
+            gain.gain.linearRampToValueAtTime(0.022 * BGM_VOLUME, audioCtx.currentTime + 0.04);
             gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
             source.connect(filter);
             filter.connect(gain);
@@ -747,7 +748,7 @@
 
                 if (bgmStep % 2 === 0) {
                     const note = JUNGLE_MELODY[bgmMelodyIndex % JUNGLE_MELODY.length];
-                    if (note.f > 0) playTone(note.f, note.w, note.d, note.v);
+                    if (note.f > 0) playTone(note.f, note.w, note.d, note.v * BGM_VOLUME);
                     bgmMelodyIndex++;
                 }
 
