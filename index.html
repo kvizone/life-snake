@@ -380,12 +380,41 @@
         @media (max-width: 768px), (hover: none) and (pointer: coarse) {
             #mobileControls { display: flex; }
         }
+
+        /* Pause overlay no canvas */
+        #pauseOverlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 4px;
+            background: rgba(0, 0, 0, 0.52);
+            color: #fff;
+            z-index: 4;
+            border-radius: 0;
+        }
+
+        /* Canvas shake */
+        @keyframes canvasShake {
+            0%,100% { transform: translate(0,0) rotate(0deg); }
+            15%     { transform: translate(-7px, 4px) rotate(-0.5deg); }
+            30%     { transform: translate(6px, -5px) rotate(0.4deg); }
+            45%     { transform: translate(-5px, 4px) rotate(-0.3deg); }
+            60%     { transform: translate(5px, -3px) rotate(0.2deg); }
+            75%     { transform: translate(-3px, 2px); }
+            90%     { transform: translate(3px, -2px); }
+        }
+        .canvas-shake { animation: canvasShake 0.42s ease; }
     </style>
 </head>
 <body>
 
     <!-- TOP RIGHT ICONS -->
     <div class="top-controls">
+        <button id="btnPause" class="icon-btn" title="Pausar / Retomar (P ou Esc)" style="display:none;"></button>
         <button id="btnMusic" class="icon-btn" title="Alternar Música"></button>
         <button id="btnTheme" class="icon-btn" title="Alternar Tema"></button>
         <button id="btnExit" class="icon-btn" title="Sair do Jogo" style="display:none;"></button>
@@ -430,10 +459,13 @@
         <div id="gameArea">
             <div id="scoreBoard">
                 <span id="gamePlayerName">JOGADOR</span>
+                <span id="gameTimer" style="font-size:1.1rem; opacity:0.65; font-weight:normal;">00:00</span>
                 <span id="gameScore">000</span>
             </div>
             <div style="position: relative; width: 100%; max-width: 400px; display: flex; justify-content: center;">
                 <canvas id="gameCanvas" width="400" height="400"></canvas>
+                <div id="flashOverlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:white;opacity:0;pointer-events:none;z-index:5;"></div>
+                <div id="pauseOverlay">⏸ PAUSE</div>
                 <button id="btnPlayAgain">JOGAR DE NOVO</button>
             </div>
 
@@ -531,6 +563,8 @@
         const canvas         = document.getElementById('gameCanvas');
         const ctx            = canvas.getContext('2d');
         const btnPlayAgain   = document.getElementById('btnPlayAgain');
+        const btnPause       = document.getElementById('btnPause');
+        const gameTimer      = document.getElementById('gameTimer');
 
         // =====================================================================
         //  SISTEMA DE ÁUDIO (Web Audio API)
@@ -775,9 +809,13 @@
         const iconSun      = `<svg viewBox="0 0 24 24"><path d="M12 7c-2.76 0-5 2.24-5 5s2.24 5 5 5 5-2.24 5-5-2.24-5-5-5zM2 13h2c.55 0 1-.45 1-1s-.45-1-1-1H2c-.55 0-1 .45-1 1s.45 1 1 1zm18 0h2c.55 0 1-.45 1-1s-.45-1-1-1h-2c-.55 0-1 .45-1 1s.45 1 1 1zM11 2v2c0 .55.45 1 1 1s1-.45 1-1V2c0-.55-.45-1-1-1s-1 .45-1 1zm0 18v2c0 .55.45 1 1 1s1-.45 1-1v-2c0-.55-.45-1-1-1s-1 .45-1 1zM5.99 4.58c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41L5.99 4.58zm12.37 12.37c-.39-.39-1.03-.39-1.41 0-.39.39-.39 1.03 0 1.41l1.06 1.06c.39.39 1.03.39 1.41 0 .39-.39.39-1.03 0-1.41l-1.06-1.06zm1.06-10.96c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06zM7.05 18.36c.39-.39.39-1.03 0-1.41-.39-.39-1.03-.39-1.41 0l-1.06 1.06c-.39.39-.39 1.03 0 1.41.39.39 1.03.39 1.41 0l1.06-1.06z"/></svg>`;
         const iconExit     = `<svg viewBox="0 0 24 24"><path d="M10.09 15.59L11.5 17l5-5-5-5-1.41 1.41L12.67 11H3v2h9.67l-2.58 2.59zM19 3H5c-1.11 0-2 .9-2 2v4h2V5h14v14H5v-4H3v4c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/></svg>`;
 
+        const iconPause = `<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>`;
+        const iconPlay  = `<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>`;
+
         btnMusic.innerHTML = iconMusicOff;
         btnTheme.innerHTML = iconMoon;
         btnExit.innerHTML  = iconExit;
+        if (btnPause) btnPause.innerHTML = iconPause;
 
         // =====================================================================
         //  CONTROLES DE MÚSICA E TEMA
@@ -827,13 +865,17 @@
                 clearTimeout(gameLoopId);
                 gameLoopId = null;
             }
+            stopTimer();
+            isPaused      = false;
             isGameRunning = false;
             isGameOver    = false;
 
+            document.getElementById('pauseOverlay').style.display = 'none';
             gameArea.style.display  = 'none';
             lobbyArea.style.display = 'block';
             btnPlayAgain.style.display = 'none';
             btnExit.style.display   = 'none';
+            if (btnPause) btnPause.style.display = 'none';
 
             updateRankingUI(rankingList);
         }
@@ -841,6 +883,7 @@
         btnTheme.addEventListener('click', toggleTheme);
         btnMusic.addEventListener('click', toggleMusic);
         btnExit.addEventListener('click', exitToLobby);
+        if (btnPause) btnPause.addEventListener('click', togglePause);
 
         // =====================================================================
         //  RANKING E SCRAPS
@@ -962,6 +1005,10 @@
         let foodsEaten = 0;
         const SPIDER_MIN_FOODS = 5;
 
+        let isPaused        = false;
+        let elapsedSeconds  = 0;
+        let timerIntervalId = null;
+
         function startGame() {
             // Limpa qualquer loop anterior
             if (gameLoopId) {
@@ -989,14 +1036,18 @@
             gameSpeed    = cfg.initial;
             gameSpeedMin = cfg.min;
             gameSpeedStep = cfg.step;
+            isPaused      = false;
             isGameOver    = false;
             isGameRunning = true;
 
             gamePlayerName.innerText = playerName;
             updateScoreUI();
+            if (gameTimer) gameTimer.textContent = '00:00';
+            if (btnPause) { btnPause.style.display = 'flex'; btnPause.innerHTML = iconPause; }
             placeFood();
             scheduleSpecialFood();
             scheduleSpider();
+            startTimer();
 
             btnPlayAgain.style.display = 'none';
 
@@ -1055,7 +1106,7 @@
                 dy: 0
             };
             spiderMoveIntervalId = setInterval(() => {
-                if (!isGameRunning || !spider) return;
+                if (!isGameRunning || !spider || isPaused) return;
                 
                 // Muda de direção às vezes para parecer errático
                 if (Math.random() < 0.3 || (!spider.dx && !spider.dy)) {
@@ -1088,9 +1139,9 @@
         function catchSpider() {
             if (!spider) return;
             soundEat();
-            score += 1000;
+            score += 500;
             updateScoreUI();
-            floatingTexts.push({ x: spider.x * GRID_SIZE, y: spider.y * GRID_SIZE, text: "+1000", life: 30 });
+            floatingTexts.push({ x: spider.x * GRID_SIZE, y: spider.y * GRID_SIZE, text: "+500", life: 30 });
             removeSpider();
             clearTimeout(spiderRemoveTimerId);
             scheduleSpider();
@@ -1126,9 +1177,6 @@
             dx = nextDx;
             dy = nextDy;
 
-            score += 1; // 1 ponto por tempo
-            updateScoreUI();
-
             const head = { x: snake[0].x + dx, y: snake[0].y + dy };
 
             // Teletransporte pelas bordas
@@ -1146,16 +1194,16 @@
             snake.unshift(head);
 
             if (head.x === food.x && head.y === food.y) {
-                score += 100;
+                score += 20;
                 foodsEaten++;
                 updateScoreUI();
                 placeFood();
                 if (gameSpeed > gameSpeedMin) gameSpeed -= gameSpeedStep;
             } else if (specialFood && head.x === specialFood.x && head.y === specialFood.y) {
                 soundEat();
-                score += 500;
+                score += 100;
                 updateScoreUI();
-                floatingTexts.push({ x: specialFood.x * GRID_SIZE, y: specialFood.y * GRID_SIZE, text: "+500", life: 30 });
+                floatingTexts.push({ x: specialFood.x * GRID_SIZE, y: specialFood.y * GRID_SIZE, text: "+100", life: 30 });
                 specialFood = null;
                 clearTimeout(removeSpecialFoodTimerId);
                 scheduleSpecialFood();
@@ -1210,11 +1258,32 @@
                 }
             }
 
-            // Cobra
+            // Corpo da cobra
             ctx.fillStyle = fgColor;
             snake.forEach(seg => {
                 ctx.fillRect(seg.x * GRID_SIZE + 1, seg.y * GRID_SIZE + 1, GRID_SIZE - 2, GRID_SIZE - 2);
             });
+
+            // Cabeça: olhinhos apontando na direção do movimento
+            if (snake.length > 0) {
+                const head = snake[0];
+                const hx = head.x * GRID_SIZE;
+                const hy = head.y * GRID_SIZE;
+                ctx.fillStyle = bgColor;
+                if (dx === 1) {          // → direita
+                    ctx.fillRect(hx + 13, hy + 4,  3, 3);
+                    ctx.fillRect(hx + 13, hy + 13, 3, 3);
+                } else if (dx === -1) {  // ← esquerda
+                    ctx.fillRect(hx + 4,  hy + 4,  3, 3);
+                    ctx.fillRect(hx + 4,  hy + 13, 3, 3);
+                } else if (dy === -1) {  // ↑ cima
+                    ctx.fillRect(hx + 4,  hy + 4,  3, 3);
+                    ctx.fillRect(hx + 13, hy + 4,  3, 3);
+                } else {                 // ↓ baixo
+                    ctx.fillRect(hx + 4,  hy + 13, 3, 3);
+                    ctx.fillRect(hx + 13, hy + 13, 3, 3);
+                }
+            }
 
             // Textos Flutuantes
             ctx.fillStyle = fgColor;
@@ -1244,7 +1313,7 @@
 
             // Caixa de informações do game over
             const boxW = 320;
-            const boxH = 220;
+            const boxH = 250;
             const boxX = (canvas.width - boxW) / 2;
             const boxY = (canvas.height - boxH) / 2;
             
@@ -1252,15 +1321,20 @@
             ctx.fillRect(boxX, boxY, boxW, boxH);
 
             // Texto "GAME OVER"
-            ctx.fillStyle = bgColor; // cor oposta para contraste
-            ctx.font = 'bold 40px "Courier New", Courier, monospace';
+            ctx.fillStyle = bgColor;
+            ctx.font = 'bold 38px "Courier New", Courier, monospace';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 50);
+            ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 68);
 
             // Score
-            ctx.font = '24px "Courier New", Courier, monospace';
-            ctx.fillText('SCORE: ' + String(score).padStart(5, '0'), canvas.width / 2, canvas.height / 2);
+            ctx.font = '22px "Courier New", Courier, monospace';
+            ctx.fillText('SCORE: ' + String(score).padStart(5, '0'), canvas.width / 2, canvas.height / 2 - 20);
+
+            // Tempo de jogo
+            const goMins = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+            const goSecs = String(elapsedSeconds % 60).padStart(2, '0');
+            ctx.fillText('TEMPO: ' + goMins + ':' + goSecs, canvas.width / 2, canvas.height / 2 + 22);
         }
 
         function gameOver() {
@@ -1273,7 +1347,11 @@
             gameLoopId    = null;
             isGameRunning = false;
             isGameOver    = true;
+            isPaused      = false;
 
+            stopTimer();
+            triggerFlash();
+            triggerShake();
             soundGameOver();
 
             // Salva no ranking
@@ -1285,18 +1363,76 @@
                 if (ranking.length > 10) ranking.length = 10;
             }
 
-            // Desenha tela de game over no canvas
-            drawGameOverScreen();
+            // Pequeno delay para o flash aparecer antes do game over screen
+            setTimeout(() => {
+                drawGameOverScreen();
+                btnPlayAgain.style.display = 'inline-block';
+            }, 130);
+        }
 
-            // Mostra botão "Jogar de Novo"
-            btnPlayAgain.style.display = 'inline-block';
+        // =====================================================================
+        //  FUNÇÕES DE PAUSA, TIMER E EFEITOS
+        // =====================================================================
+        function startTimer() {
+            elapsedSeconds = 0;
+            if (timerIntervalId) clearInterval(timerIntervalId);
+            timerIntervalId = setInterval(() => {
+                if (isPaused || !isGameRunning) return;
+                elapsedSeconds++;
+                const m = String(Math.floor(elapsedSeconds / 60)).padStart(2, '0');
+                const s = String(elapsedSeconds % 60).padStart(2, '0');
+                if (gameTimer) gameTimer.textContent = m + ':' + s;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerIntervalId);
+            timerIntervalId = null;
+        }
+
+        function triggerFlash() {
+            const overlay = document.getElementById('flashOverlay');
+            if (!overlay) return;
+            overlay.style.transition = 'none';
+            overlay.style.opacity = '0.88';
+            setTimeout(() => {
+                overlay.style.transition = 'opacity 0.38s ease';
+                overlay.style.opacity = '0';
+            }, 85);
+        }
+
+        function triggerShake() {
+            canvas.classList.add('canvas-shake');
+            setTimeout(() => canvas.classList.remove('canvas-shake'), 460);
+        }
+
+        function pauseGame() {
+            if (!isGameRunning || isGameOver || isPaused) return;
+            isPaused = true;
+            clearTimeout(gameLoopId);
+            gameLoopId = null;
+            document.getElementById('pauseOverlay').style.display = 'flex';
+            if (btnPause) btnPause.innerHTML = iconPlay;
+        }
+
+        function resumeGame() {
+            if (!isGameRunning || !isPaused) return;
+            isPaused = false;
+            document.getElementById('pauseOverlay').style.display = 'none';
+            if (btnPause) btnPause.innerHTML = iconPause;
+            gameLoop();
+        }
+
+        function togglePause() {
+            if (isPaused) resumeGame();
+            else pauseGame();
         }
 
         // =====================================================================
         //  CONTROLES DE DIREÇÃO
         // =====================================================================
         function setDirection(nx, ny) {
-            if (!isGameRunning) return;
+            if (!isGameRunning || isPaused) return;
             if (nx !== 0 && dx === 0) {
                 nextDx = nx;
                 nextDy = 0;
@@ -1317,9 +1453,14 @@
                 if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) {
                     e.preventDefault();
                 }
+                if ((e.key === 'Escape' || e.key === 'p' || e.key === 'P') && isGameRunning && !isGameOver) {
+                    e.preventDefault();
+                    togglePause();
+                    return;
+                }
             }
 
-            if (!isGameRunning) return;
+            if (!isGameRunning || isPaused) return;
 
             switch (e.key) {
                 case 'ArrowUp':    case 'w': case 'W': setDirection(0, -1); break;
